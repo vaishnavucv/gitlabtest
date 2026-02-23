@@ -1,0 +1,33 @@
+stages:
+  - deploy
+  - health_check
+
+variables:
+  REMOTE_IP: "10.10.0.2"
+  REMOTE_USER: "ubuntu"
+  HARBOR_IMAGE: "harbor.example.com/project/my-app:latest"
+
+deploy_job:
+  stage: deploy
+  image: ubuntu:latest
+  before_script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan $REMOTE_IP >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - echo "Deploying to $REMOTE_USER@$REMOTE_IP..."
+    - ssh $REMOTE_USER@$REMOTE_IP "IMAGE=$HARBOR_IMAGE bash -s" < scripts/deploy.sh
+  only:
+    - main
+
+verify_deployment:
+  stage: health_check
+  image: python:3.9-slim
+  script:
+    - python3 scripts/health_check.py
+  only:
+    - main
